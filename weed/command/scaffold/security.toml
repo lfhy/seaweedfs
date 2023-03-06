@@ -98,3 +98,8 @@ ca = ""
 cert = ""
 key = ""
 ca = ""
+
+[https.filer]
+cert = ""
+key = ""
+ca = ""

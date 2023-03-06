@@ -20,6 +20,7 @@ import (
 	weed_server "github.com/seaweedfs/seaweedfs/weed/server"
 	stats_collect "github.com/seaweedfs/seaweedfs/weed/stats"
 	"github.com/seaweedfs/seaweedfs/weed/util"
+	"github.com/spf13/viper"
 )
 
 var (
@@ -300,6 +301,26 @@ func (fo *FilerOptions) startFiler() {
 	}
 	go grpcS.Serve(grpcL)
 
+	// start http server
+	var (
+		clientCertFile,
+		certFile,
+		keyFile string
+	)
+	useTLS := false
+	useMTLS := false
+
+	if viper.GetString("https.filer.key") != "" {
+		useTLS = true
+		certFile = viper.GetString("https.filer.cert")
+		keyFile = viper.GetString("https.filer.key")
+	}
+
+	if viper.GetString("https.filer.ca") != "" {
+		useMTLS = true
+		clientCertFile = viper.GetString("https.filer.ca")
+	}
+
 	httpS := &http.Server{Handler: defaultMux}
 	if runtime.GOOS != "windows" {
 		localSocket := *fo.localSocket
@@ -325,8 +346,18 @@ func (fo *FilerOptions) startFiler() {
 			}
 		}()
 	}
-	if err := httpS.Serve(filerListener); err != nil {
-		glog.Fatalf("Filer Fail to serve: %v", e)
+
+	if useMTLS {
+		httpS.TLSConfig = security.LoadClientTLSHTTP(clientCertFile)
 	}
 
+	if useTLS {
+		if err := httpS.ServeTLS(filerListener, certFile, keyFile); err != nil {
+			glog.Fatalf("Filer Fail to serve: %v", e)
+		}
+	} else {
+		if err := httpS.Serve(filerListener); err != nil {
+			glog.Fatalf("Filer Fail to serve: %v", e)
+		}
+	}
 }
